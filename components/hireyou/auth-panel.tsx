@@ -44,13 +44,43 @@ export function AuthPanel() {
 
     try {
       if (mode === "sign-in") {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
 
         if (signInError) {
           throw signInError;
+        }
+
+        const { data: accountProfile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("user_id", signInData.user.id)
+          .maybeSingle();
+
+        if (profileError || !accountProfile) {
+          const { error: signOutError } = await supabase.auth.signOut();
+          if (signOutError) {
+            throw new Error(`Your account type couldn't be checked, and sign-out failed: ${signOutError.message}`);
+          }
+          throw new Error(
+            profileError
+              ? `Your account type couldn't be checked: ${profileError.message}`
+              : "Your account profile was not found. Please contact support.",
+          );
+        }
+
+        if (accountProfile.role !== role) {
+          const { error: signOutError } = await supabase.auth.signOut();
+          if (signOutError) {
+            throw new Error(`This email uses a different account type, and sign-out failed: ${signOutError.message}`);
+          }
+          const accountType = accountProfile.role === "employer" ? "Hiring for my company" : "Looking for work";
+          const requestedType = role === "employer" ? "employer" : "candidate";
+          throw new Error(
+            `This email is registered for ${accountType}. Select that account type to sign in. To create an ${requestedType} account, use a different email address.`,
+          );
         }
       } else {
         if (role === "candidate" && interests.length === 0) {

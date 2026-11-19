@@ -2082,6 +2082,8 @@ a {
 .workspace-shell {
   max-width: none;
   padding-bottom: 3rem;
+  overflow-x: clip;
+  overflow-y: visible;
 }
 
 .workspace-shell > .market-header,
@@ -2097,6 +2099,38 @@ a {
   max-width: none;
   padding-right: max(clamp(1.25rem, 5vw, 5rem), calc((100% - 1240px) / 2));
   padding-left: max(clamp(1.25rem, 5vw, 5rem), calc((100% - 1240px) / 2));
+}
+
+.workspace-shell > .market-header nav.candidate-nav {
+  min-width: 0;
+  flex: 1;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
+.candidate-nav-button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  background: transparent;
+  color: #bfc2b9;
+  font: inherit;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 180ms ease;
+}
+
+.candidate-nav-button:hover,
+.candidate-nav-button.is-active {
+  color: var(--lime);
+}
+
+.candidate-nav-button.is-active {
+  box-shadow: inset 0 -2px var(--lime);
 }
 
 .workspace-welcome {
@@ -2510,6 +2544,101 @@ a {
 .workspace-section-heading {
   margin-top: 3rem !important;
   padding: 1.5rem;
+}
+
+.candidate-feed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 1rem;
+  padding: 0 1.5rem;
+}
+
+.candidate-opportunity-card {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 0.7rem;
+  padding: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: #10120f;
+}
+
+.candidate-opportunity-card h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: -0.035em;
+}
+
+.candidate-opportunity-card h3 a:hover {
+  color: var(--lime);
+}
+
+.candidate-opportunity-description {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: #aeb0a8;
+  font-size: 0.75rem;
+  line-height: 1.65;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.candidate-opportunity-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.9rem;
+  color: #aeb0a8;
+  font-size: 0.65rem;
+}
+
+.candidate-opportunity-facts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.candidate-opportunity-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--lime);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.candidate-opportunity-link:hover {
+  color: #d3ff69;
+}
+
+.candidate-job-search {
+  width: auto;
+  margin: 0 1.5rem 1rem;
+}
+
+.candidate-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 0 1.5rem;
+}
+
+.candidate-stats-grid article {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  background: #10120f;
+}
+
+.candidate-stats-grid span {
+  color: #aeb0a8;
+  font-size: 0.7rem;
+}
+
+.candidate-stats-grid strong {
+  color: var(--lime);
+  font-size: 1.6rem;
 }
 
 .workspace-count {
@@ -2961,6 +3090,23 @@ a {
     gap: 0.65rem;
   }
 
+  .workspace-shell > .market-header nav.candidate-nav {
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .workspace-shell > .market-header nav.candidate-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .candidate-nav-button {
+    gap: 0.3rem;
+    padding-right: 0.45rem;
+    padding-left: 0.45rem;
+    font-size: 0.66rem;
+  }
+
   .workspace-welcome {
     align-items: flex-start;
     flex-direction: column;
@@ -2979,9 +3125,21 @@ a {
 
   .workspace-section-heading,
   .workspace-role-list,
-  .candidate-application-list {
+  .candidate-application-list,
+  .candidate-feed-grid {
     margin-right: 0 !important;
     margin-left: 0 !important;
+    padding-right: 1.25rem;
+    padding-left: 1.25rem;
+  }
+
+  .candidate-job-search {
+    margin-right: 1.25rem;
+    margin-left: 1.25rem;
+  }
+
+  .candidate-stats-grid {
+    grid-template-columns: 1fr;
     padding-right: 1.25rem;
     padding-left: 1.25rem;
   }

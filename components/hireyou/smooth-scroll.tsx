@@ -1,10 +1,15 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import Lenis from "lenis";
 
 export default function SmoothScroll() {
+  const pathname = usePathname();
+
   useEffect(() => {
+    if (pathname === "/dashboard") return;
+
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     if (reducedMotion.matches) return;
 
@@ -16,7 +21,7 @@ export default function SmoothScroll() {
     });
 
     return () => lenis.destroy();
-  }, []);
+  }, [pathname]);
 
   return null;
 }

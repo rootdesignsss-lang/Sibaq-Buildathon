@@ -15,16 +15,18 @@ export function ApplicationChat({
   applicationId,
   currentUserId,
   otherName,
+  defaultOpen = false,
 }: {
   applicationId: string;
   currentUserId: string;
   otherName: string;
+  defaultOpen?: boolean;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [body, setBody] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   const supabase = getSupabaseBrowserClient();
 
   const loadMessages = useCallback(async () => {

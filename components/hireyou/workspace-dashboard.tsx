@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -8,9 +8,15 @@ import {
   BriefcaseBusiness,
   CheckCircle2,
   Clock3,
+  Home,
+  LayoutDashboard,
   LogOut,
+  MapPin,
+  MessageCircle,
   RefreshCw,
+  Search,
   Sparkles,
+  UserRound,
   Users,
 } from "lucide-react";
 import type { CandidateProfile, JobListing } from "@/lib/jobs";
@@ -40,9 +46,39 @@ type CandidateApplication = {
   job: Pick<JobListing, "id" | "title" | "company_name" | "category" | "deadline" | "task_title"> | null;
 };
 
+type CandidateSection = "home" | "jobs" | "messages" | "dashboard" | "account";
+
+const candidateTabs: { id: CandidateSection; label: string; icon: typeof Home }[] = [
+  { id: "home", label: "Home", icon: Home },
+  { id: "jobs", label: "Search jobs", icon: Search },
+  { id: "messages", label: "Messages", icon: MessageCircle },
+  { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "account", label: "Account", icon: UserRound },
+];
+
+function CandidateOpportunityCard({ job }: { job: JobListing }) {
+  return (
+    <article className="candidate-opportunity-card">
+      <p className="market-eyebrow">{job.category} · {job.company_name || "Hiring team"}</p>
+      <h3><Link href={`/challenges/${job.id}`}>{job.title}</Link></h3>
+      <p className="candidate-opportunity-description">{job.description}</p>
+      <div className="candidate-opportunity-facts">
+        <span><MapPin size={14} />{job.location}</span>
+        <span>{job.salary_range || "Salary not listed"}</span>
+        <span><Clock3 size={14} />Apply by {new Date(job.deadline).toLocaleDateString()}</span>
+      </div>
+      <Link href={`/challenges/${job.id}`} className="candidate-opportunity-link">
+        View opportunity <ArrowRight size={15} />
+      </Link>
+    </article>
+  );
+}
+
 export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
   const supabase = getSupabaseBrowserClient();
   const router = useRouter();
+  const [candidateSection, setCandidateSection] = useState<CandidateSection>("home");
+  const [jobSearch, setJobSearch] = useState("");
   const [jobs, setJobs] = useState<JobListing[]>([]);
   const [openJobs, setOpenJobs] = useState<JobListing[]>([]);
   const [employerApplications, setEmployerApplications] = useState<EmployerApplication[]>([]);
@@ -54,6 +90,16 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
   const [bio, setBio] = useState(profile.bio);
   const [profileStatus, setProfileStatus] = useState("");
   const [profileError, setProfileError] = useState("");
+
+  const filteredOpenJobs = useMemo(() => {
+    const query = jobSearch.trim().toLowerCase();
+    if (!query) return openJobs;
+    return openJobs.filter((job) =>
+      `${job.title} ${job.company_name} ${job.category} ${job.description} ${job.location}`
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [jobSearch, openJobs]);
 
   const loadWorkspace = useCallback(async () => {
     if (!supabase) return;
@@ -177,8 +223,21 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
     <main className="workspace-shell">
       <header className="market-header">
         <Link href="/" className="market-brand">HIREYOU<span>.</span></Link>
-        <nav aria-label="Workspace navigation">
-          <Link href="/challenges">Browse work</Link>
+        <nav aria-label="Workspace navigation" className={profile.role === "candidate" ? "candidate-nav" : ""}>
+          {profile.role === "candidate" ? candidateTabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                type="button"
+                key={tab.id}
+                className={`candidate-nav-button${candidateSection === tab.id ? " is-active" : ""}`}
+                aria-current={candidateSection === tab.id ? "page" : undefined}
+                onClick={() => setCandidateSection(tab.id)}
+              >
+                <Icon size={16} /><span>{tab.label}</span>
+              </button>
+            );
+          }) : <Link href="/challenges">Browse work</Link>}
           <button type="button" className="workspace-signout" onClick={signOut}><LogOut size={15} /> Sign out</button>
         </nav>
       </header>
@@ -197,31 +256,33 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
 
       {loadError && <p className="workspace-error" role="alert">{loadError}</p>}
 
-      <section className="workspace-profile-card">
-        <div className="workspace-profile-heading">
-          <div className="workspace-avatar">{(profile.full_name || profile.company_name || "H").slice(0, 1).toUpperCase()}</div>
-          <div><p className="market-eyebrow">Your introduction</p><h2>{profile.role === "candidate" ? "Profile before paperwork." : profile.company_name}</h2></div>
-        </div>
-        {profile.role === "candidate" ? (
-          <form onSubmit={saveBio} className="workspace-bio-form">
-            <label htmlFor="candidate-bio">A short bio</label>
-            <textarea id="candidate-bio" value={bio} maxLength={600} onChange={(event) => setBio(event.target.value)} placeholder="Tell people what kind of work you enjoy." />
-            <div className="workspace-bio-footer">
-              <span>{bio.length}/600 characters</span>
-              <button type="submit">Save bio</button>
-            </div>
-            {profile.interests.length > 0 && (
-              <div className="workspace-interest-tags">
-                {profile.interests.map((interest) => <span key={interest}>{interest}</span>)}
+      {(profile.role === "employer" || candidateSection === "account") && (
+        <section className="workspace-profile-card">
+          <div className="workspace-profile-heading">
+            <div className="workspace-avatar">{(profile.full_name || profile.company_name || "H").slice(0, 1).toUpperCase()}</div>
+            <div><p className="market-eyebrow">{profile.role === "candidate" ? "Profile & account settings" : "Your introduction"}</p><h2>{profile.role === "candidate" ? "Profile before paperwork." : profile.company_name}</h2></div>
+          </div>
+          {profile.role === "candidate" ? (
+            <form onSubmit={saveBio} className="workspace-bio-form">
+              <label htmlFor="candidate-bio">A short bio</label>
+              <textarea id="candidate-bio" value={bio} maxLength={600} onChange={(event) => setBio(event.target.value)} placeholder="Tell people what kind of work you enjoy." />
+              <div className="workspace-bio-footer">
+                <span>{bio.length}/600 characters</span>
+                <button type="submit">Save bio</button>
               </div>
-            )}
-            {profileStatus && <p className="job-inline-success" role="status">{profileStatus}</p>}
-            {profileError && <p className="job-inline-error" role="alert">{profileError}</p>}
-          </form>
-        ) : (
-          <p className="workspace-company-note">Your open jobs and applicant results are only visible to your hiring team.</p>
-        )}
-      </section>
+              {profile.interests.length > 0 && (
+                <div className="workspace-interest-tags">
+                  {profile.interests.map((interest) => <span key={interest}>{interest}</span>)}
+                </div>
+              )}
+              {profileStatus && <p className="job-inline-success" role="status">{profileStatus}</p>}
+              {profileError && <p className="job-inline-error" role="alert">{profileError}</p>}
+            </form>
+          ) : (
+            <p className="workspace-company-note">Your open jobs and applicant results are only visible to your hiring team.</p>
+          )}
+        </section>
+      )}
 
       {profile.role === "employer" ? (
         <>
@@ -281,47 +342,160 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
         </>
       ) : (
         <>
-          <NikoAssistant
-            profile={profile}
-            jobs={openJobs}
-            applications={candidateApplications}
-          />
-          <section className="workspace-section-heading">
-            <div><p className="market-eyebrow">Every application tells a story</p><h2>Your work samples</h2></div>
-            <Link href="/challenges" className="market-nav-cta">Find a role <ArrowRight size={15} /></Link>
-          </section>
-          {candidateApplications.length === 0 ? (
-            <div className="workspace-empty">
-              <Sparkles size={24} />
-              <h3>Your next opportunity is waiting.</h3>
-              <p>Find a role that fits, then start with a short job-specific work sample.</p>
-              <Link href="/challenges" className="job-apply-button">Explore open roles <ArrowRight size={16} /></Link>
-            </div>
-          ) : (
-            <div className="candidate-application-list">
-              {candidateApplications.map((application) => (
-                <article className="candidate-application-card" key={application.id}>
-                  <div className="candidate-application-head">
-                    <div>
-                      <p className="market-eyebrow">{application.job?.company_name || "Hiring team"} · {application.job?.category}</p>
-                      <h3>{application.job?.title || "Role no longer available"}</h3>
-                    </div>
-                    <span className={`workspace-status ${application.status === "submitted" ? "is-open" : ""}`}>{application.status}</span>
-                  </div>
-                  <div className="candidate-application-result">
-                    {application.result_score === null
-                      ? <><Clock3 size={16} /> Work sample in progress</>
-                      : <><CheckCircle2 size={16} /> Your score <strong>{application.result_score}/100</strong></>}
-                  </div>
-                  <div className="candidate-application-actions">
-                    <Link href={`/challenges/${application.vacancy_id}`} className="workspace-view-job">
-                      {application.result_score === null ? "Continue work sample" : "View application"} <ArrowRight size={15} />
-                    </Link>
-                    <ApplicationChat applicationId={application.id} currentUserId={profile.user_id} otherName={application.job?.company_name || "the hiring team"} />
-                  </div>
-                </article>
-              ))}
-            </div>
+          {candidateSection === "home" && (
+            <>
+              <NikoAssistant profile={profile} jobs={openJobs} applications={candidateApplications} />
+              <section className="workspace-section-heading">
+                <div><p className="market-eyebrow">Fresh opportunities</p><h2>Your job feed</h2></div>
+                <button type="button" className="market-nav-cta" onClick={() => setCandidateSection("jobs")}>
+                  Search all jobs <ArrowRight size={15} />
+                </button>
+              </section>
+              {openJobs.length ? (
+                <div className="candidate-feed-grid">
+                  {openJobs.slice(0, 6).map((job) => <CandidateOpportunityCard key={job.id} job={job} />)}
+                </div>
+              ) : (
+                <div className="workspace-empty">
+                  <BriefcaseBusiness size={24} />
+                  <h3>No new jobs yet.</h3>
+                  <p>New opportunities will appear here when employers post them.</p>
+                </div>
+              )}
+            </>
+          )}
+
+          {candidateSection === "jobs" && (
+            <>
+              <section className="workspace-section-heading">
+                <div><p className="market-eyebrow">Explore open opportunities</p><h2>Search jobs</h2></div>
+                <span className="workspace-count">{filteredOpenJobs.length} open roles</span>
+              </section>
+              <label className="market-search candidate-job-search">
+                <Search size={17} />
+                <input
+                  type="search"
+                  value={jobSearch}
+                  onChange={(event) => setJobSearch(event.target.value)}
+                  placeholder="Search roles, companies, skills"
+                  aria-label="Search open jobs"
+                />
+              </label>
+              {filteredOpenJobs.length ? (
+                <div className="candidate-feed-grid">
+                  {filteredOpenJobs.map((job) => <CandidateOpportunityCard key={job.id} job={job} />)}
+                </div>
+              ) : (
+                <div className="workspace-empty">
+                  <Search size={24} />
+                  <h3>{openJobs.length ? "No jobs match your search." : "No open jobs right now."}</h3>
+                  <p>{openJobs.length ? "Try a different title, company, or skill." : "Check back soon for new opportunities."}</p>
+                </div>
+              )}
+            </>
+          )}
+
+          {candidateSection === "messages" && (
+            <>
+              <section className="workspace-section-heading">
+                <div><p className="market-eyebrow">Conversations with hiring teams</p><h2>Messages</h2></div>
+              </section>
+              {candidateApplications.length ? (
+                <div className="candidate-application-list">
+                  {candidateApplications.map((application, index) => (
+                    <article className="candidate-application-card" key={application.id}>
+                      <div className="candidate-application-head">
+                        <div>
+                          <p className="market-eyebrow">{application.job?.company_name || "Hiring team"} · {application.job?.category}</p>
+                          <h3>{application.job?.title || "Role no longer available"}</h3>
+                        </div>
+                        <span className={`workspace-status ${application.status === "submitted" ? "is-open" : ""}`}>{application.status}</span>
+                      </div>
+                      <ApplicationChat
+                        applicationId={application.id}
+                        currentUserId={profile.user_id}
+                        otherName={application.job?.company_name || "the hiring team"}
+                        defaultOpen={index === 0}
+                      />
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="workspace-empty">
+                  <MessageCircle size={24} />
+                  <h3>Your conversations will show up here.</h3>
+                  <p>Apply to a role to start messaging its hiring team.</p>
+                  <button type="button" className="job-apply-button" onClick={() => setCandidateSection("jobs")}>
+                    Find a role <ArrowRight size={16} />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {candidateSection === "dashboard" && (
+            <>
+              <section className="workspace-section-heading">
+                <div><p className="market-eyebrow">Your progress</p><h2>My dashboard</h2></div>
+              </section>
+              <div className="candidate-stats-grid">
+                <article><span>Applications</span><strong>{candidateApplications.length}</strong></article>
+                <article><span>Work samples complete</span><strong>{candidateApplications.filter((application) => application.result_score !== null).length}</strong></article>
+                <article><span>Open opportunities</span><strong>{openJobs.length}</strong></article>
+              </div>
+              <section className="workspace-section-heading">
+                <div><p className="market-eyebrow">Keep moving forward</p><h2>Your work samples</h2></div>
+              </section>
+              {candidateApplications.length ? (
+                <div className="candidate-application-list">
+                  {candidateApplications.map((application) => (
+                    <article className="candidate-application-card" key={application.id}>
+                      <div className="candidate-application-head">
+                        <div>
+                          <p className="market-eyebrow">{application.job?.company_name || "Hiring team"} · {application.job?.category}</p>
+                          <h3>{application.job?.title || "Role no longer available"}</h3>
+                        </div>
+                        <span className={`workspace-status ${application.status === "submitted" ? "is-open" : ""}`}>{application.status}</span>
+                      </div>
+                      <div className="candidate-application-result">
+                        {application.result_score === null
+                          ? <><Clock3 size={16} /> Work sample in progress</>
+                          : <><CheckCircle2 size={16} /> Your score <strong>{application.result_score}/100</strong></>}
+                      </div>
+                      <div className="candidate-application-actions">
+                        <Link href={`/challenges/${application.vacancy_id}`} className="workspace-view-job">
+                          {application.result_score === null ? "Continue work sample" : "View application"} <ArrowRight size={15} />
+                        </Link>
+                        <ApplicationChat applicationId={application.id} currentUserId={profile.user_id} otherName={application.job?.company_name || "the hiring team"} />
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="workspace-empty">
+                  <Sparkles size={24} />
+                  <h3>Your next opportunity is waiting.</h3>
+                  <p>Find a role that fits, then start with a short job-specific work sample.</p>
+                  <button type="button" className="job-apply-button" onClick={() => setCandidateSection("jobs")}>
+                    Explore open roles <ArrowRight size={16} />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {candidateSection === "account" && (
+            <>
+              <section className="workspace-section-heading">
+                <div><p className="market-eyebrow">Your details</p><h2>Account settings</h2></div>
+              </section>
+              <div className="workspace-empty candidate-account-note">
+                <UserRound size={24} />
+                <h3>{profile.full_name || "Your candidate account"}</h3>
+                <p>Your interests and introduction help Niko find relevant opportunities. To change your password, use “Reset password” on the sign-in page.</p>
+                <Link href="/auth" className="workspace-view-job">Password & sign-in settings <ArrowRight size={15} /></Link>
+              </div>
+            </>
           )}
         </>
       )}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Lato } from "next/font/google";
 import SmoothScroll from "@/components/hireyou/smooth-scroll";
 import "./globals.css";
@@ -18,7 +19,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={`${lato.variable} h-full antialiased`} data-scroll-behavior="smooth">
       <body className="min-h-full bg-[#080908] text-white">
-        <SmoothScroll />
+        <Suspense fallback={null}>
+          <SmoothScroll />
+        </Suspense>
         {children}
       </body>
     </html>
