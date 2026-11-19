@@ -28,19 +28,19 @@ async function OpenRoles() {
 
   const { data, error } = await supabase
     .from("job_vacancies")
-    .select("id, employer_id, title, company_name, description, category, location, employment_type, salary_range, deadline, task_title, task_brief, task_config, status, created_at")
+    .select("id, employer_id, title, company_name, description, category, location, employment_type, salary_range, deadline, task_title, task_brief, task_config, status, created_at, employer:profiles!job_vacancies_employer_id_fkey(company_bio, company_logo_url, company_city, company_region, company_website)")
     .eq("status", "open")
     .gt("deadline", new Date().toISOString())
     .order("created_at", { ascending: false });
 
   if (error) {
-    const schemaMissing = error.code === "PGRST205" || error.code === "42P01";
+    const schemaMissing = ["PGRST204", "PGRST205", "42P01", "42703"].includes(error.code);
     return (
       <JobMarketplace
         jobs={[]}
         loadError={
           schemaMissing
-            ? "The HIREYOU database tables are not set up yet. Run supabase/schema.sql in your Supabase SQL Editor, then refresh."
+            ? "The HIREYOU database schema needs an update. Run the latest supabase/schema.sql in your Supabase SQL Editor, then refresh."
             : `The job board could not be loaded: ${error.message}`
         }
       />

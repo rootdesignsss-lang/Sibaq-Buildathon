@@ -4,7 +4,18 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ArrowUpRight, Clock3, MapPin } from "lucide-react";
 import { JobApplication } from "@/components/hireyou/job-application";
 import type { CandidateProfile, JobListing } from "@/lib/jobs";
+import { getEmployerProfile, getJobTasks } from "@/lib/jobs";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
+
+function safeExternalUrl(value?: string) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : null;
+  } catch {
+    return null;
+  }
+}
 
 async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -21,7 +32,7 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
 
   const { data: job, error } = await supabase
     .from("job_vacancies")
-    .select("id, employer_id, title, company_name, description, category, location, employment_type, salary_range, deadline, task_title, task_brief, task_config, status, created_at")
+    .select("id, employer_id, title, company_name, description, category, location, employment_type, salary_range, deadline, task_title, task_brief, task_config, status, created_at, employer:profiles!job_vacancies_employer_id_fkey(company_bio, company_logo_url, company_city, company_region, company_website)")
     .eq("id", id)
     .maybeSingle();
 
@@ -41,13 +52,16 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
   if (user) {
     const { data } = await supabase
       .from("profiles")
-      .select("user_id, role, full_name, bio, interests, company_name")
+      .select("user_id, role, full_name, bio, interests, company_name, company_bio, company_logo_url, company_city, company_region, company_website")
       .eq("user_id", user.id)
       .maybeSingle();
     profile = data;
   }
 
   const listing: JobListing = job;
+  const tasks = getJobTasks(listing);
+  const employer = getEmployerProfile(listing.employer);
+  const companyWebsite = safeExternalUrl(employer?.company_website);
 
   return (
     <main className="job-detail-shell">
@@ -62,9 +76,26 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
       <section className="job-detail-hero">
         <div className="job-detail-photo" role="img" aria-label={`${job.category} team collaborating`} />
         <div className="job-detail-intro">
-          <p className="market-eyebrow">{job.category} · {job.company_name || "Hiring team"}</p>
+          <div className="job-company-profile">
+            {employer?.company_logo_url
+              ? <img src={employer.company_logo_url} alt="" />
+              : <span>{(job.company_name || "H").slice(0, 1).toUpperCase()}</span>}
+            <div>
+              <p className="market-eyebrow">{job.company_name || "Hiring team"}</p>
+              {(employer?.company_city || employer?.company_region) && (
+                <small>{[employer?.company_city, employer?.company_region].filter(Boolean).join(", ")}</small>
+              )}
+            </div>
+          </div>
+          <p className="market-eyebrow">{job.category}</p>
           <h1>{job.title}</h1>
           <p className="job-detail-description">{job.description}</p>
+          {employer?.company_bio && <p className="job-company-bio">{employer.company_bio}</p>}
+          {companyWebsite && (
+            <a className="job-company-website" href={companyWebsite} target="_blank" rel="noopener noreferrer">
+              Company website <ArrowUpRight size={14} />
+            </a>
+          )}
           <div className="job-detail-facts">
             <span><MapPin size={16} />{job.location}</span>
             <span>{job.employment_type}</span>
@@ -76,11 +107,18 @@ async function JobDetail({ params }: { params: Promise<{ id: string }> }) {
 
       <section className="job-task-layout">
         <div className="job-task-brief">
-          <p className="market-eyebrow">A chance to show your approach</p>
-          <h2>{job.task_title}</h2>
-          <p>{job.task_brief}</p>
+          <p className="market-eyebrow">{tasks.length} task{tasks.length === 1 ? "" : "s"} · A chance to show your approach</p>
+          {tasks.map((task, index) => (
+            <article className="job-task-preview" key={task.id}>
+              <p className="market-eyebrow">Task {index + 1} · {task.type.replace(/_/g, " ")}</p>
+              <h2>{task.title}</h2>
+              <p>{task.instructions}</p>
+              {task.type === "multiple_choice" && <small>{task.questions?.length ?? 0} question{task.questions?.length === 1 ? "" : "s"}</small>}
+              {task.type === "file_upload" && <small>Up to {task.maxFiles ?? 5} files · 25 MB each · 100 MB total per application</small>}
+            </article>
+          ))}
           <div className="job-task-note">
-            No CV screen. Complete this short work sample so the team can see how you think.
+            Complete all assigned tasks. Your answers, links, and files will be attached to your application for the hiring team to review.
           </div>
         </div>
         <JobApplication

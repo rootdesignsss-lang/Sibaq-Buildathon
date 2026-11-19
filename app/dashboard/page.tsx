@@ -50,17 +50,17 @@ async function DashboardContent() {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("user_id, role, full_name, bio, interests, company_name")
+    .select("user_id, role, full_name, bio, interests, company_name, company_bio, company_logo_url, company_city, company_region, company_website")
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (error) {
-    const schemaMissing = error.code === "PGRST205" || error.code === "42P01";
+    const schemaMissing = ["PGRST204", "PGRST205", "42P01", "42703"].includes(error.code);
     return (
       <SetupNotice
         details={
           schemaMissing
-            ? "The database tables are not set up yet. Run supabase/schema.sql in the Supabase SQL Editor to enable profiles, jobs, applications, scores, and chat."
+            ? "The database schema needs an update. Run the latest supabase/schema.sql in the Supabase SQL Editor to enable company profiles, varied tasks, private file submissions, reviews, and chat."
             : `Your profile could not be loaded: ${error.message}`
         }
       />

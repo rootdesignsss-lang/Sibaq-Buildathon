@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowDown, ArrowRight, ArrowUpRight, Search } from "lucide-react";
+import { getEmployerProfile } from "@/lib/jobs";
 import type { JobListing } from "@/lib/jobs";
 
 const categoryImages: Record<string, string> = {
@@ -122,6 +123,7 @@ export function JobMarketplace({
           <div className="market-job-grid">
             {filteredJobs.map((job, index) => {
               const image = categoryImages[job.category] ?? categoryImages.default;
+              const employer = getEmployerProfile(job.employer);
               return (
                 <motion.article
                   key={job.id}
@@ -145,7 +147,17 @@ export function JobMarketplace({
                       <span className="market-job-arrow"><ArrowUpRight size={17} /></span>
                     </div>
                     <div className="market-job-content">
-                      <p className="market-company">{job.company_name || "Hiring team"} · {job.location}</p>
+                      <div className="market-job-company">
+                        {employer?.company_logo_url
+                          ? <img src={employer.company_logo_url} alt="" />
+                          : <span>{(job.company_name || "H").slice(0, 1).toUpperCase()}</span>}
+                        <div>
+                          <p className="market-company">{job.company_name || "Hiring team"} · {job.location}</p>
+                          {(employer?.company_city || employer?.company_region) && (
+                            <small>{[employer?.company_city, employer?.company_region].filter(Boolean).join(", ")}</small>
+                          )}
+                        </div>
+                      </div>
                       <h3>{job.title}</h3>
                       <p className="market-job-description">{job.description}</p>
                       <div className="market-job-footer">
@@ -153,7 +165,7 @@ export function JobMarketplace({
                         <span>Apply by {formatDeadline(job.deadline)}</span>
                       </div>
                       <div className="market-task-teaser">
-                        <span>WORK SAMPLE</span>
+                        <span>{job.task_config.tasks?.length ?? 1} TASK{(job.task_config.tasks?.length ?? 1) === 1 ? "" : "S"}</span>
                         <strong>{job.task_title}</strong>
                         <span className="market-task-cta">See the task <ArrowRight size={14} /></span>
                       </div>

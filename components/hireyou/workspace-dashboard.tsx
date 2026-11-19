@@ -19,19 +19,26 @@ import {
   UserRound,
   Users,
 } from "lucide-react";
+import { getEmployerProfile } from "@/lib/jobs";
 import type { CandidateProfile, JobListing } from "@/lib/jobs";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { JobComposer } from "@/components/hireyou/job-composer";
 import { ApplicationChat } from "@/components/hireyou/application-chat";
 import { NikoAssistant } from "@/components/hireyou/niko-assistant";
+import { EmployerProfileSettings } from "@/components/hireyou/employer-profile-settings";
+import { SubmissionReview } from "@/components/hireyou/submission-review";
+import type { ApplicationTaskAnswers } from "@/lib/jobs";
 
 type EmployerApplication = {
   id: string;
   vacancy_id: string;
   candidate_id: string;
   status: string;
+  task_answers: ApplicationTaskAnswers;
   result_score: number | null;
-  result_feedback: { correct?: number; total?: number };
+  result_feedback: { correct?: number; total?: number; review_required?: boolean };
+  employer_feedback: string;
+  reviewed_at: string | null;
   created_at: string;
   candidate?: CandidateProfile | null;
 };
@@ -40,10 +47,13 @@ type CandidateApplication = {
   id: string;
   vacancy_id: string;
   status: string;
+  employer_feedback: string;
   result_score: number | null;
   result_feedback: { correct?: number; total?: number };
   created_at: string;
-  job: Pick<JobListing, "id" | "title" | "company_name" | "category" | "deadline" | "task_title"> | null;
+  job: (Pick<JobListing, "id" | "title" | "company_name" | "category" | "deadline" | "task_title"> & {
+    employer?: JobListing["employer"];
+  }) | null;
 };
 
 type CandidateSection = "home" | "jobs" | "messages" | "dashboard" | "account";
@@ -57,9 +67,20 @@ const candidateTabs: { id: CandidateSection; label: string; icon: typeof Home }[
 ];
 
 function CandidateOpportunityCard({ job }: { job: JobListing }) {
+  const employer = getEmployerProfile(job.employer);
   return (
     <article className="candidate-opportunity-card">
-      <p className="market-eyebrow">{job.category} · {job.company_name || "Hiring team"}</p>
+      <div className="candidate-company">
+        {employer?.company_logo_url
+          ? <img src={employer.company_logo_url} alt="" />
+          : <span>{(job.company_name || "H").slice(0, 1).toUpperCase()}</span>}
+        <div>
+          <p className="market-eyebrow">{job.company_name || "Hiring team"} · {job.category}</p>
+          {(employer?.company_city || employer?.company_region) && (
+            <small>{[employer?.company_city, employer?.company_region].filter(Boolean).join(", ")}</small>
+          )}
+        </div>
+      </div>
       <h3><Link href={`/challenges/${job.id}`}>{job.title}</Link></h3>
       <p className="candidate-opportunity-description">{job.description}</p>
       <div className="candidate-opportunity-facts">
@@ -90,6 +111,7 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
   const [bio, setBio] = useState(profile.bio);
   const [profileStatus, setProfileStatus] = useState("");
   const [profileError, setProfileError] = useState("");
+  const [employerCompanyName, setEmployerCompanyName] = useState(profile.company_name);
 
   const filteredOpenJobs = useMemo(() => {
     const query = jobSearch.trim().toLowerCase();
@@ -122,7 +144,7 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
       if (ownedJobs.length) {
         const { data: applicationRows, error: applicationsError } = await supabase
           .from("applications")
-          .select("id, vacancy_id, candidate_id, status, result_score, result_feedback, created_at")
+          .select("id, vacancy_id, candidate_id, status, task_answers, result_score, result_feedback, employer_feedback, reviewed_at, created_at")
           .in("vacancy_id", ownedJobs.map((job) => job.id))
           .order("result_score", { ascending: false });
 
@@ -134,7 +156,7 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
           const { data: profiles, error: profileLoadError } = candidateIds.length
             ? await supabase
                 .from("profiles")
-                .select("user_id, role, full_name, bio, interests, company_name")
+                  .select("user_id, role, full_name, bio, interests, company_name")
                 .in("user_id", candidateIds)
             : { data: [], error: null };
 
@@ -155,12 +177,12 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
       const [applicationsResult, jobsResult] = await Promise.all([
         supabase
           .from("applications")
-          .select("id, vacancy_id, status, result_score, result_feedback, created_at, job:job_vacancies(id, title, company_name, category, deadline, task_title)")
+          .select("id, vacancy_id, status, employer_feedback, result_score, result_feedback, created_at, job:job_vacancies(id, title, company_name, category, deadline, task_title, employer:profiles!job_vacancies_employer_id_fkey(company_logo_url, company_city, company_region, company_website))")
           .eq("candidate_id", profile.user_id)
           .order("created_at", { ascending: false }),
         supabase
           .from("job_vacancies")
-          .select("id, employer_id, title, company_name, description, category, location, employment_type, salary_range, deadline, task_title, task_brief, task_config, status, created_at")
+          .select("id, employer_id, title, company_name, description, category, location, employment_type, salary_range, deadline, task_title, task_brief, task_config, status, created_at, employer:profiles!job_vacancies_employer_id_fkey(company_logo_url, company_city, company_region, company_website)")
           .eq("status", "open")
           .gt("deadline", new Date().toISOString())
           .order("created_at", { ascending: false }),
@@ -245,12 +267,12 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
       <section className="workspace-welcome">
         <div>
           <p className="market-eyebrow">{profile.role === "candidate" ? "Candidate workspace" : "Employer workspace"}</p>
-          <h1>Welcome, <span>{profile.full_name || profile.company_name || "there"}.</span></h1>
+          <h1>Welcome, <span>{profile.full_name || employerCompanyName || "there"}.</span></h1>
           <p>{profile.role === "candidate" ? "Your skills should get the first look. Track work samples and keep in touch with hiring teams." : "Meet people through their work. Publish roles and review applicant work samples."}</p>
         </div>
         <div className="workspace-role-badge">
           {profile.role === "candidate" ? <Sparkles size={18} /> : <BriefcaseBusiness size={18} />}
-          {profile.role === "candidate" ? "Looking for work" : `Hiring · ${profile.company_name}`}
+          {profile.role === "candidate" ? "Looking for work" : `Hiring · ${employerCompanyName}`}
         </div>
       </section>
 
@@ -259,8 +281,8 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
       {(profile.role === "employer" || candidateSection === "account") && (
         <section className="workspace-profile-card">
           <div className="workspace-profile-heading">
-            <div className="workspace-avatar">{(profile.full_name || profile.company_name || "H").slice(0, 1).toUpperCase()}</div>
-            <div><p className="market-eyebrow">{profile.role === "candidate" ? "Profile & account settings" : "Your introduction"}</p><h2>{profile.role === "candidate" ? "Profile before paperwork." : profile.company_name}</h2></div>
+            <div className="workspace-avatar">{(profile.full_name || employerCompanyName || "H").slice(0, 1).toUpperCase()}</div>
+            <div><p className="market-eyebrow">{profile.role === "candidate" ? "Profile & account settings" : "Your company profile"}</p><h2>{profile.role === "candidate" ? "Profile before paperwork." : employerCompanyName}</h2></div>
           </div>
           {profile.role === "candidate" ? (
             <form onSubmit={saveBio} className="workspace-bio-form">
@@ -279,7 +301,7 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
               {profileError && <p className="job-inline-error" role="alert">{profileError}</p>}
             </form>
           ) : (
-            <p className="workspace-company-note">Your open jobs and applicant results are only visible to your hiring team.</p>
+            <EmployerProfileSettings profile={{ ...profile, company_name: employerCompanyName }} onSaved={setEmployerCompanyName} />
           )}
         </section>
       )}
@@ -290,7 +312,7 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
             <div><p className="market-eyebrow">Find your next teammate</p><h2>Your roles & applicants</h2></div>
             <div className="workspace-count"><Users size={17} /> {employerApplications.length} applicants</div>
           </section>
-          <JobComposer profile={profile} onPublished={() => void loadWorkspace()} />
+          <JobComposer profile={{ ...profile, company_name: employerCompanyName }} onPublished={() => void loadWorkspace()} />
 
           {jobs.length === 0 ? (
             <div className="workspace-empty">
@@ -308,28 +330,33 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
                       <div><p className="market-eyebrow">{job.category} · {job.location}</p><h3>{job.title}</h3></div>
                       <span className={`workspace-status ${job.status === "open" ? "is-open" : ""}`}>{job.status}</span>
                     </div>
-                    <p className="workspace-role-task"><Sparkles size={15} /> {job.task_title}</p>
+                    <p className="workspace-role-task"><Sparkles size={15} /> {job.task_config.tasks?.length ?? 1} task{(job.task_config.tasks?.length ?? 1) === 1 ? "" : "s"} · {job.task_title}</p>
                     <p className="workspace-role-deadline"><Clock3 size={15} /> Apply by {new Date(job.deadline).toLocaleDateString()}</p>
                     <div className="workspace-applicant-list">
                       <h4>{applicants.length ? "Applicants · ranked by work sample" : "No applicants yet"}</h4>
                       {applicants.map((application) => (
-                        <div className="workspace-applicant" key={application.id}>
-                          <div className="applicant-avatar">{(application.candidate?.full_name || "C").slice(0, 1).toUpperCase()}</div>
-                          <div className="applicant-details">
-                            <strong>{application.candidate?.full_name || "Candidate"}</strong>
-                            <span>{application.candidate?.bio || "Building skills through real work."}</span>
-                            <div className="workspace-interest-tags">
-                              {(application.candidate?.interests ?? []).map((interest) => <span key={interest}>{interest}</span>)}
+                        <div className="workspace-applicant-record" key={application.id}>
+                          <div className="workspace-applicant">
+                            <div className="applicant-avatar">{(application.candidate?.full_name || "C").slice(0, 1).toUpperCase()}</div>
+                            <div className="applicant-details">
+                              <strong>{application.candidate?.full_name || "Candidate"}</strong>
+                              <span>{application.candidate?.bio || "Building skills through real work."}</span>
+                              <div className="workspace-interest-tags">
+                                {(application.candidate?.interests ?? []).map((interest) => <span key={interest}>{interest}</span>)}
+                              </div>
                             </div>
+                            <div className={`applicant-score${application.result_score === null ? " is-pending" : ""}`}>
+                              {application.result_score === null
+                                ? application.status === "started" ? "In progress" : "Manual review"
+                                : `${application.result_score}/100`}
+                            </div>
+                            <ApplicationChat
+                              applicationId={application.id}
+                              currentUserId={profile.user_id}
+                              otherName={application.candidate?.full_name || "candidate"}
+                            />
                           </div>
-                          <div className={`applicant-score${application.result_score === null ? " is-pending" : ""}`}>
-                            {application.result_score === null ? "In progress" : `${application.result_score}/100`}
-                          </div>
-                          <ApplicationChat
-                            applicationId={application.id}
-                            currentUserId={profile.user_id}
-                            otherName={application.candidate?.full_name || "candidate"}
-                          />
+                          <SubmissionReview job={job} application={application} />
                         </div>
                       ))}
                     </div>
@@ -344,7 +371,6 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
         <>
           {candidateSection === "home" && (
             <>
-              <NikoAssistant profile={profile} jobs={openJobs} applications={candidateApplications} />
               <section className="workspace-section-heading">
                 <div><p className="market-eyebrow">Fresh opportunities</p><h2>Your job feed</h2></div>
                 <button type="button" className="market-nav-cta" onClick={() => setCandidateSection("jobs")}>
@@ -440,7 +466,7 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
               </section>
               <div className="candidate-stats-grid">
                 <article><span>Applications</span><strong>{candidateApplications.length}</strong></article>
-                <article><span>Work samples complete</span><strong>{candidateApplications.filter((application) => application.result_score !== null).length}</strong></article>
+                <article><span>Work samples submitted</span><strong>{candidateApplications.filter((application) => application.status !== "started").length}</strong></article>
                 <article><span>Open opportunities</span><strong>{openJobs.length}</strong></article>
               </div>
               <section className="workspace-section-heading">
@@ -458,13 +484,16 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
                         <span className={`workspace-status ${application.status === "submitted" ? "is-open" : ""}`}>{application.status}</span>
                       </div>
                       <div className="candidate-application-result">
-                        {application.result_score === null
+                        {application.status === "started"
                           ? <><Clock3 size={16} /> Work sample in progress</>
+                          : application.result_score === null
+                            ? <><Clock3 size={16} /> Submitted · under employer review</>
                           : <><CheckCircle2 size={16} /> Your score <strong>{application.result_score}/100</strong></>}
                       </div>
+                      {application.employer_feedback && <p className="candidate-employer-feedback">Employer feedback: {application.employer_feedback}</p>}
                       <div className="candidate-application-actions">
                         <Link href={`/challenges/${application.vacancy_id}`} className="workspace-view-job">
-                          {application.result_score === null ? "Continue work sample" : "View application"} <ArrowRight size={15} />
+                          {application.status === "started" ? "Continue work sample" : "View application"} <ArrowRight size={15} />
                         </Link>
                         <ApplicationChat applicationId={application.id} currentUserId={profile.user_id} otherName={application.job?.company_name || "the hiring team"} />
                       </div>
@@ -498,6 +527,10 @@ export function WorkspaceDashboard({ profile }: { profile: CandidateProfile }) {
             </>
           )}
         </>
+      )}
+
+      {profile.role === "candidate" && (
+        <NikoAssistant profile={profile} jobs={openJobs} applications={candidateApplications} />
       )}
 
       <footer className="workspace-footer">
